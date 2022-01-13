@@ -55,12 +55,6 @@ Class {
 }
 
 { #category : #'instance creation' }
-ProtocolAdaptor class >> new [
-
-	^super new initialize
-]
-
-{ #category : #'instance creation' }
 ProtocolAdaptor class >> upBlock: aBlock [
 
 	^self new upBlock: aBlock

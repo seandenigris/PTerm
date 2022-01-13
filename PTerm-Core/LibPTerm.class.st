@@ -50,6 +50,11 @@ LibPTerm class >> TIOCSWINSZ [
 	^21524
 ]
 
+{ #category : #lib }
+LibPTerm class >> closept: fd [
+	^ self ffiCall: #(int close(int fd)) module: LibC
+]
+
 { #category : #compilation }
 LibPTerm class >> compile [
 	|cmd arch st fp libfile ofile|
@@ -69,25 +74,133 @@ LibPTerm class >> compile [
 	ofile asFileReference delete
 ]
 
+{ #category : #'instance creation' }
+LibPTerm class >> exec: command [
+	^ LibC uniqueInstance system: command
+]
+
+{ #category : #'accessing platform' }
+LibPTerm class >> ffiLibraryName [
+	^ (FileLocator imageDirectory / 'libpterm.flib') pathString
+]
+
+{ #category : #lib }
+LibPTerm class >> fileActionAddDup: pointer fd: fd newFd: fd2 [ 
+	^self ffiCall: #(int posix_spawn_file_actions_adddup2( void* pointer, int fd, int fd2)) module: LibC.
+]
+
+{ #category : #lib }
+LibPTerm class >> fileActionAddOpen: pointer fd: fd fileName: name flag: flag mode: mode [ 
+	^self ffiCall: #(int posix_spawn_file_actions_addopen( void* pointer, int fd, char* name, int flag, int mode )) module: LibC.
+]
+
+{ #category : #lib }
+LibPTerm class >> fileActionInit: pointer [
+	^self ffiCall: #(int posix_spawn_file_actions_init( void* pointer )) module: LibC.
+]
+
+{ #category : #lib }
+LibPTerm class >> fileActionSettingFor: fname [
+	|st ptr|
+	ptr := ExternalAddress allocate: self sizeOfFileAction.
+	st := self fileActionInit: ptr.
+	st = 0 ifFalse:[^ self error:'Error posix_spawn_file_actions_init'].
+	st := self fileActionAddOpen: ptr fd: 0  fileName: fname flag: self O_RDWR mode: 0644. 
+	st = 0 ifFalse: [ ^ self error:'Error posix_spawn_file_actions_open' ].
+	"st := self fileActionAddDup: ptr fd: 0  newFd: 0.
+	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ]."
+	st := self fileActionAddDup: ptr fd: 0  newFd: 1.
+	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ].
+	st := self fileActionAddDup: ptr fd: 0  newFd: 2.
+	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ].
+	^ ptr
+]
+
+{ #category : #lib }
+LibPTerm class >> fnctl: fd action: action flag: flag [
+ 	^ self ffiCall: #(int fcntl(int fd, int action, int flag)) module: LibC 
+]
+
+{ #category : #writing }
+LibPTerm class >> getReadWriteBufferOf: size [
+	^(FFIExternalArray externalNewType: 'char' size: size) getHandle
+]
+
+{ #category : #lib }
+LibPTerm class >> grantpt: fd [
+	^ self ffiCall: #(int grantpt(int fd)) module: LibC
+]
+
+{ #category : #lib }
+LibPTerm class >> ioct: fd cmd: cmd arg: arg [
+	^ self ffiCall: #(int ioctl(int fd, ulong cmd, void* arg)) module: LibC
+]
+
+{ #category : #accessing }
+LibPTerm class >> kill: pid signal: sig [
+	^ self ffiCall: #(int kill(int pid, int sig)) module: LibC
+]
+
+{ #category : #accessing }
+LibPTerm class >> master [
+	|fd st|
+	fd := self openpt: (self O_RDWR bitOr: self O_NONBLOCK).
+	fd < 0 ifTrue:[^self error:'Error on on posix_openpt()'].
+	st := self grantpt: fd.
+	st ~= 0 ifTrue: [ self closept: fd. ^ self error: 'Error on grantpt()' ].
+	st := self unlockpt: fd.
+	st ~= 0 ifTrue: [ self closept: fd. ^ self error: 'Error on unlockpt()' ].
+	^fd
+	
+]
+
 { #category : #compilation }
 LibPTerm class >> mksource [
-	|file stream|
-	file := ('./' asFileReference absolutePath / 'libpterm.c') asFileReference.
+	|file|
+	file := FileLocator imageDirectory / 'libpterm.c'.
 	file exists ifTrue:[ file delete ].
-	stream := file writeStream.
-	stream nextPutAll: self source.
-	stream close.
+	file writeStreamDo: [ :str | str nextPutAll: self source ].
 	^file
 ]
 
-{ #category : #'instance creation' }
-LibPTerm class >> new [
-	self error: 'Please use #singleton'
+{ #category : #lib }
+LibPTerm class >> open: name mode: flag [
+	^ self ffiCall: #(int open(char* name, int flag)) module: LibC
 ]
 
-{ #category : #'instance creation' }
-LibPTerm class >> singleton [ 
-	^ self uniqueInstance 
+{ #category : #lib }
+LibPTerm class >> openpt: flag [
+	^ self ffiCall: #(int posix_openpt(int flag)) module: LibC
+]
+
+{ #category : #lib }
+LibPTerm class >> posixSpawn:pid  process: cmd fileAction: ptr fileAttr:fattr argv: args env: envs [
+	^ self ffiCall:#( int posix_spawnp(int* pid, char* cmd, void* ptr, void* fattr, void* args, void* envs ))  module: LibC  
+]
+
+{ #category : #lib }
+LibPTerm class >> print: text [
+	^ self ffiCall: #(void printf(char* text)) module: LibC
+]
+
+{ #category : #lib }
+LibPTerm class >> ptsname: fd [
+	^ self ffiCall: #(char* ptsname(int fd)) module: LibC
+]
+
+{ #category : #lib }
+LibPTerm class >> read: fd buffer: buff size: size [
+	^self ffiCall: #(int read(int fd, char* buff, int size)) module: LibC 
+]
+
+{ #category : #initialization }
+LibPTerm class >> setNonBlocking: fd [
+	|flag st|
+	flag := self fnctl: fd action: self F_GETFL flag:0.
+	flag := flag bitOr: self O_NONBLOCK.
+	st := self fnctl: fd action: self F_SETFL flag: flag.
+	st = 0 ifFalse:[^self error: 'Cannot set nonblocking'].
+	^st
 ]
 
 { #category : #'C-constants' }
@@ -157,137 +270,7 @@ int tty_set_winsize(int fdm, int rows, int cols)
 ]
 
 { #category : #lib }
-LibPTerm >> closept: fd [
-	^ self ffiCall: #(int close(int fd)) module: LibC
-]
-
-{ #category : #'instance creation' }
-LibPTerm >> exec: command [
-	^ LibC uniqueInstance system: command
-]
-
-{ #category : #lib }
-LibPTerm >> fileActionAddDup: pointer fd: fd newFd: fd2 [ 
-	^self ffiCall: #(int posix_spawn_file_actions_adddup2( void* pointer, int fd, int fd2)) module: LibC.
-]
-
-{ #category : #lib }
-LibPTerm >> fileActionAddOpen: pointer fd: fd fileName: name flag: flag mode: mode [ 
-	^self ffiCall: #(int posix_spawn_file_actions_addopen( void* pointer, int fd, char* name, int flag, int mode )) module: LibC.
-]
-
-{ #category : #lib }
-LibPTerm >> fileActionInit: pointer [
-	^self ffiCall: #(int posix_spawn_file_actions_init( void* pointer )) module: LibC.
-]
-
-{ #category : #lib }
-LibPTerm >> fileActionSettingFor:name [
-	|st ptr|
-	ptr := ExternalAddress allocate: self class sizeOfFileAction.
-	st := self fileActionInit: ptr.
-	st = 0 ifFalse:[^ self error:'Error posix_spawn_file_actions_init'].
-	st := self fileActionAddOpen: ptr fd: 0  fileName: name  flag: self class O_RDWR  mode: 0644. 
-	st = 0 ifFalse: [ ^ self error:'Error posix_spawn_file_actions_open' ].
-	"st := self fileActionAddDup: ptr fd: 0  newFd: 0.
-	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ]."
-	st := self fileActionAddDup: ptr fd: 0  newFd: 1.
-	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ].
-	st := self fileActionAddDup: ptr fd: 0  newFd: 2.
-	st = 0 ifFalse: [ ^self error: 'Error posix_spawn_file_action_dup2' ].
-	^ ptr
-]
-
-{ #category : #lib }
-LibPTerm >> fnctl: fd action: action flag: flag [
- 	^ self ffiCall: #(int fcntl(int fd, int action, int flag)) module: LibC 
-]
-
-{ #category : #writing }
-LibPTerm >> getReadWriteBufferOf: size [
-	^(FFIExternalArray externalNewType: 'char' size: size) getHandle
-]
-
-{ #category : #lib }
-LibPTerm >> grantpt: fd [
-	^ self ffiCall: #(int grantpt(int fd)) module: LibC
-]
-
-{ #category : #lib }
-LibPTerm >> ioct: fd cmd: cmd arg: arg [
-	^ self ffiCall: #(int ioctl(int fd, ulong cmd, void* arg)) module: LibC
-]
-
-{ #category : #accessing }
-LibPTerm >> kill: pid signal: sig [
-	^ self ffiCall: #(int kill(int pid, int sig)) module: LibC
-]
-
-{ #category : #'accessing platform' }
-LibPTerm >> macModuleName [ 
-	^ self moduleName
-]
-
-{ #category : #accessing }
-LibPTerm >> master [
-	|fd st|
-	fd := self openpt: (self class O_RDWR bitOr: self class O_NONBLOCK).
-	fd < 0 ifTrue:[^self error:'Error on on posix_openpt()'].
-	st := self grantpt: fd.
-	st ~= 0 ifTrue: [ self closept: fd. ^ self error: 'Error on grantpt()' ].
-	st := self unlockpt: fd.
-	st ~= 0 ifTrue: [ self closept: fd. ^ self error: 'Error on unlockpt()' ].
-	^fd
-	
-]
-
-{ #category : #'accessing platform' }
-LibPTerm >> moduleName [
-	^ (('./' asFileReference absolutePath) / 'libpterm.flib') asFileReference pathString
-]
-
-{ #category : #lib }
-LibPTerm >> open: name mode: flag [
-	^ self ffiCall: #(int open(char* name, int flag)) module: LibC
-]
-
-{ #category : #lib }
-LibPTerm >> openpt: flag [
-	^ self ffiCall: #(int posix_openpt(int flag)) module: LibC
-]
-
-{ #category : #lib }
-LibPTerm >> posixSpawn:pid  process: cmd fileAction: ptr fileAttr:fattr argv: args env: envs [
-	^ self ffiCall:#( int posix_spawnp(int* pid, char* cmd, void* ptr, void* fattr, void* args, void* envs ))  module: LibC  
-]
-
-{ #category : #lib }
-LibPTerm >> print: text [
-	^ self ffiCall: #(void printf(char* text)) module: LibC
-]
-
-{ #category : #lib }
-LibPTerm >> ptsname: fd [
-	^ self ffiCall: #(char* ptsname(int fd)) module: LibC
-]
-
-{ #category : #lib }
-LibPTerm >> read: fd buffer: buff size: size [
-	^self ffiCall: #(int read(int fd, char* buff, int size)) module: LibC 
-]
-
-{ #category : #initialization }
-LibPTerm >> setNonBlocking: fd [
-	|flag st|
-	flag := self fnctl: fd action: self class F_GETFL flag:0.
-	flag := flag bitOr: self class O_NONBLOCK.
-	st := self fnctl: fd action: self class F_SETFL flag: flag.
-	st = 0 ifFalse:[^self error: 'Cannot set nonblocking'].
-	^st
-]
-
-{ #category : #lib }
-LibPTerm >> stringArrayOf: anArray [
+LibPTerm class >> stringArrayOf: anArray [
 	|xarray|
 	anArray  ifNil: [ ^nil ].
 	xarray := FFIExternalArray externalNewType: 'char*' size: anArray size + 1. 
@@ -297,40 +280,35 @@ LibPTerm >> stringArrayOf: anArray [
 ]
 
 { #category : #lib }
-LibPTerm >> ttySpawn: fd argv: argv envs:envs [
+LibPTerm class >> ttySpawn: fd argv: argv envs:envs [
 	[ ^ self xspawn: fd argv: argv  envs: envs ] on: Error do: [ 
 		"try tho compile it"
-		self class compile.
+		self compile.
 		^self xspawn: fd argv: argv  envs: envs
 	] 
 ]
 
 { #category : #lib }
-LibPTerm >> ttyWinSize: fd rows:rows cols:cols [
+LibPTerm class >> ttyWinSize: fd rows:rows cols:cols [
 	^ self ffiCall: #(int tty_set_winsize(int fd, int rows, int cols)) 
 ]
 
-{ #category : #'accessing platform' }
-LibPTerm >> unixModuleName [
-	^ self moduleName
-]
-
 { #category : #lib }
-LibPTerm >> unlockpt: fd [
+LibPTerm class >> unlockpt: fd [
 	^ self ffiCall: #(int unlockpt(int fd)) module: LibC
 ]
 
 { #category : #lib }
-LibPTerm >> waitpid: pid status: buf noHang: v [
+LibPTerm class >> waitpid: pid status: buf noHang: v [
 	^ self ffiCall: #(int waitpid(int pid, int * buf, int v)) module: LibC
 ]
 
 { #category : #writing }
-LibPTerm >> write: fd buffer: buff size: size [
+LibPTerm class >> write: fd buffer: buff size: size [
 	^self ffiCall: #(int write(int fd, char* buff, int size)) module: LibC 
 ]
 
 { #category : #lib }
-LibPTerm >> xspawn: fd argv: argv envs:envs [
+LibPTerm class >> xspawn: fd argv: argv envs:envs [
 	^ self ffiCall: #(int pterm_spawn_tty(int fd, void* argv, void* envs)) 
 ]

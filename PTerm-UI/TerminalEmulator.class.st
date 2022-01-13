@@ -150,6 +150,13 @@ TerminalEmulator class >> initialize [
 	TerminalType := TerminalEmulatorXterm.
 	Shortcuts := Dictionary new.
 	
+	self announcer when: TerminalEmulatorConfigChange do: [:e|
+		self allInstancesDo: [ :i |
+			e data class = LogicalFont ifTrue:[i updateFont]
+			ifFalse:[i updateTheme]
+		]
+	].
+	
 ]
 
 { #category : #'world menu' }
@@ -163,19 +170,8 @@ TerminalEmulator class >> menuCommandOn: aBuilder [
 		parent: #'MostUsedTools';
 		keyText: 'o, c';
 		help: 'Terminal';
-		action: [ self openBash ].
+		action: [ self openBash openInWorld ].
 
-]
-
-{ #category : #'instance creation' }
-TerminalEmulator class >> new [
-	self announcer when: TerminalEmulatorConfigChange do: [:e|
-		self allInstancesDo: [ :i |
-			e data class = LogicalFont ifTrue:[i updateFont]
-			ifFalse:[i updateTheme]
-		]
-	].
-	^super new initialize
 ]
 
 { #category : #'instance creation' }
@@ -386,18 +382,22 @@ TerminalEmulator >> initialize [
 
 { #category : #events }
 TerminalEmulator >> keyStroke: evt [
+	Halt if: [ evt isKeystroke and: [ evt keyValue = 13 ] ].
+	
 	self tty keyStroke: evt.
 	evt wasHandled: true.
 ]
 
 { #category : #events }
 TerminalEmulator >> keyboardFocusChange: aBoolean [
+	Transcript crShow: 'focus change'.
 	super keyboardFocusChange: aBoolean.
 	self tty keyboardFocusChange: aBoolean 
 ]
 
 { #category : #'initialize-release' }
 TerminalEmulator >> openOn: ttyMorph [
+
 	"Open a new SystemWindow containing just a ttyMorph."
 
 	| ext |
@@ -407,11 +407,15 @@ TerminalEmulator >> openOn: ttyMorph [
 		addMorph: tty frame: (0 @ 0 corner: 1 @ 1);
 		model: tty.
 	"Figure out what our extent should be based on how much extra space we use for decoration."
-	ext := tty preferredExtent						"the extent that the tty would like to receive"
-		+ self extent - self ttyLayoutBounds extent.	"window decoration"
-	self activeHand keyboardFocus: nil.			"make sure we get focus when we're opened"
-	self extent: ext; openInWorldExtent: ext.
-	tty install; run
+	ext := tty preferredExtent + self extent
+	       - self ttyLayoutBounds extent. "the extent that the tty would like to receive" "window decoration"
+	World activeHand keyboardFocus: nil. "make sure we get focus when we're opened"
+	self
+		extent: ext;
+		extent: ext.
+	tty
+		install;
+		run
 ]
 
 { #category : #'initialize-release' }
@@ -427,7 +431,7 @@ TerminalEmulator >> qdoFastWindowReframe: ptName [
 	"Override to provide geometry feedback at display top left and to ensure sane gridding of final bounds."
 
 	| newBounds delta flak w pitch skip grid h |
-	"For fast display, only higlight the rectangle during loop"
+	"For fast display, only highlight the rectangle during loop"
 	flak := self bounds extent - tty textBounds extent.
 	pitch := tty pitch.
 	skip := tty skip.
@@ -483,7 +487,7 @@ TerminalEmulator >> simulateShortcutAsKeyStroke: comb [
 				position: 0@0 
 				keyValue: comb key asciiValue + 1 - $a asciiValue
 				charCode: comb key asciiValue
-				hand: ActiveHand 
+				hand: self world activeHand 
 				stamp: 0.
 	tty keyStroke: evt
 ]

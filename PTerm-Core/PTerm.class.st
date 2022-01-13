@@ -22,7 +22,7 @@ PTerm >> close [
 	self master ifNotNil: [
 		self nextPutAllCr: 'exit'.
 		pid ifNotNil: [ 
-			self lib kill: pid signal: self lib class SIGKILL.
+			self lib kill: pid signal: self lib SIGKILL.
 		].
 	]
 ]
@@ -51,7 +51,7 @@ PTerm >> isConnected [
 
 { #category : #'instance creation' }
 PTerm >> lib [ 
-	^ LibPTerm singleton 
+	^ LibPTerm 
 ]
 
 { #category : #accessing }
@@ -110,8 +110,12 @@ PTerm >> run [
 { #category : #initialization }
 PTerm >> setWinsize: point [
 	|buf arr st|
-	[self lib ttyWinSize: self master rows: point y  cols: point x] on: Error do: [
-		buf := FFIExternalArray externalNewType: 'uint8' size: self lib class ST_WINSIZE.
+	[ "Halt now."
+		self lib 
+			ttyWinSize: self master 
+			rows: point y 
+			cols: point x ] on: Error do: [
+		buf := FFIExternalArray externalNewType: 'uint8' size: self lib ST_WINSIZE.
 		arr := point y asByteArrayOfSize: 2.
 		buf at: 1 put: (arr at:2).
 		buf at:2 put: (arr at: 1).
@@ -122,14 +126,14 @@ PTerm >> setWinsize: point [
 		buf at: 6 put: 0.
 		buf at: 7 put: 0.
 		buf at: 8 put:0.
-		st := self lib ioct: self master cmd: self lib class TIOCSWINSZ  arg: buf getHandle.
+		st := self lib ioct: self master cmd: self lib TIOCSWINSZ arg: buf getHandle.
 		st = 0 ifFalse:[^self error: 'Cannot set window size to', point asString ]
 	]
 ]
 
 { #category : #'instance creation' }
 PTerm >> spawn [
-	|buff status argv xarray fname fileaction pid count data|
+	|buff status argv xarray fname fileaction count data|
 	"allocate the file action structure (void* for now)"
 	status := FFIUInt32  newBuffer.
 	argv := {'ls'. '-al'}.
@@ -147,7 +151,7 @@ PTerm >> spawn [
 	newFrom: (FFIExternalArray fromHandle: buff type: 'char' size: count).
 	Transcript show: data;cr.
 	self lib kill: pid signal: self lib class SIGKILL.
-	self lib waitpit: pid status: status noHang: 0. 
+	self lib waitpid: pid status: status noHang: 0. 
 	fileaction free.
 	Transcript show: 'Finish'.
 ]

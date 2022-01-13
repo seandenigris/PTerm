@@ -16,12 +16,6 @@ Class {
 }
 
 { #category : #'instance creation' }
-TerminalEmulatorTextState class >> new [
-
-	^super new initialize
-]
-
-{ #category : #'instance creation' }
 TerminalEmulatorTextState class >> new: size [
 
 	^self string: (String new: size withAll: $ )

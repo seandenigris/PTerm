@@ -4582,12 +4582,6 @@ ENDFONT
 '
 ]
 
-{ #category : #'instance creation' }
-TerminalEmulatorLineMorph class >> new [
-
-	^super new initialize
-]
-
 { #category : #private }
 TerminalEmulatorLineMorph >> backgroundColourAt: i [
 
@@ -4712,6 +4706,8 @@ TerminalEmulatorLineMorph >> foregroundColourAt: i [
 TerminalEmulatorLineMorph >> initialize [
 	"Initialize the receiver with empty contents."
 
+	super initialize.
+	
 	self contents: TerminalEmulatorTextState new.
 	self announcer when: TerminalEmulatorConfigChange  do: [ :e| self setUpFont. Transcript show: 'font changed']. 
 	"self on: Character null ctrl  do: [ :e| Transcript show: 'stroke';cr ]"

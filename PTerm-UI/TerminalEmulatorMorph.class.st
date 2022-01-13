@@ -254,7 +254,7 @@ TerminalEmulatorMorph >> activePosition: aPoint [
 
 { #category : #private }
 TerminalEmulatorMorph >> autoFlush [
-
+"Halt now."
 	(autoFlush := autoFlush - 1) < 1
 		ifTrue:
 			[self updateScrollbar; changed.
@@ -446,7 +446,7 @@ TerminalEmulatorMorph >> copySelection [
 
 { #category : #'cursor control' }
 TerminalEmulatorMorph >> cr [
-
+"Halt now."
 	self hideCursor.
 	x := 1.
 	self showCursor
@@ -741,7 +741,7 @@ TerminalEmulatorMorph >> handlesMouseOver: evt [
 
 { #category : #accessing }
 TerminalEmulatorMorph >> hasFocus [
-
+self debug: 'Has focus: ' with: hasFocus printString.
 	^hasFocus
 ]
 
@@ -996,6 +996,7 @@ TerminalEmulatorMorph >> keyStroke: evt [
 	"Receive a character from the keyboard."
 	| char |
 	"evt inspect."
+	"Halt now."
 	scrollOnInput ifTrue: [self pageEnd].
 	char := evt keyValue "keyCharacter asciiValue".
 	evt shiftPressed 
@@ -1025,6 +1026,7 @@ TerminalEmulatorMorph >> keyStroke: evt [
 
 { #category : #events }
 TerminalEmulatorMorph >> keyboardFocusChange: aBoolean [
+	Transcript crShow: 'focus: ', aBoolean printString.
 	hasFocus := aBoolean
 ]
 
@@ -1166,6 +1168,7 @@ TerminalEmulatorMorph >> mouseUp: evt [
 
 "	evt printString displayAt: 10@240.
 "
+	down downcall: 13. 
 	evt redButtonChanged ifTrue: [self endSelection: evt position].
 	evt wasHandled: true
 ]

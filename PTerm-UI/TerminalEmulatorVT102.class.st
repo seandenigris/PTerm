@@ -38,7 +38,7 @@ TerminalEmulatorVT102 class >> initialize [
 	"TerminalEmulatorVT102 initialize"
 
 	"protocol"
-	States := self protocol compile.
+	states := self protocol compile.
 
 	"character sets"
 	CharsUK := Array new: 256.
@@ -53,7 +53,7 @@ TerminalEmulatorVT102 class >> initialize [
 TerminalEmulatorVT102 class >> new [
 	"VT100Emulator new"
 
-	^super new initialize initialState: States
+	^super new initialState: states
 ]
 
 { #category : #'class initialization' }
@@ -198,7 +198,7 @@ TerminalEmulatorVT102 >> clearArguments: arg [
 { #category : #'control characters' }
 TerminalEmulatorVT102 >> cr: arg [
 	"carriage return"
-
+"Halt now."
 	self traceControl: 'CR'.
 	window cr
 ]

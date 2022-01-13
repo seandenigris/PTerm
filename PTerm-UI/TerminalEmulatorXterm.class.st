@@ -18,15 +18,14 @@ Class {
 TerminalEmulatorXterm class >> initialize [
 	"TerminalEmulatorXterm initialize"
 
-	super initialize.
-	States := self protocol compile
+	states := self protocol compile
 ]
 
 { #category : #'instance creation' }
 TerminalEmulatorXterm class >> new [
 	"TerminalEmulatorXterm new"
 
-	^super new initialState: States
+	^super new initialState: states
 ]
 
 { #category : #'class initialization' }
